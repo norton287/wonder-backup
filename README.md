@@ -10,17 +10,6 @@ Designed around one core principle: **a single inaccessible file should never ki
 
 ---
 
-## Two Script Versions
-
-| File | Description |
-|---|---|
-| **`spindlecrank_backup.py`** | Canonical version. Computes SHA-256 checksums in a single streaming pass via `_HashingReader` during archive write. Supports batched SQLite commits (`db_commit_batch`), CPU/IO priority settings (`nice_level`, `ionice_class`), and probes files with a 1-byte read. |
-| **`backup.py`** | Older, simpler version. Computes checksums with a separate `sha256_file()` call after archive write (two reads per file). No batching, no process priority controls, probes files with a 64 KB read. |
-
-New work should target `spindlecrank_backup.py`.
-
----
-
 ## Features
 
 - **Single-file granularity** — each file is handled independently with its own probe, write, and retry cycle
@@ -43,23 +32,23 @@ New work should target `spindlecrank_backup.py`.
 
 ```bash
 # 1. Download the script
-curl -O https://raw.githubusercontent.com/norton287/wonder-backup/main/spindlecrank_backup.py
-chmod +x spindlecrank_backup.py
+curl -O https://raw.githubusercontent.com/norton287/wonder-backup/master/backup.py
+chmod +x backup.py
 
 # 2. Create required directories
 mkdir -p /backups /var/lib/spindlecrank
 
 # 3. Generate the default config
-python3 spindlecrank_backup.py --generate-config
+python3 backup.py --generate-config
 
 # 4. Edit config to set your source directories
 nano /etc/spindlecrank/backup.ini
 
 # 5. Run a dry run first to verify what will be backed up
-python3 spindlecrank_backup.py --dry-run
+python3 backup.py --dry-run
 
 # 6. Run the backup (requires root for system directories)
-sudo python3 spindlecrank_backup.py
+sudo python3 backup.py
 ```
 
 ---
@@ -272,8 +261,8 @@ The startup dependency check will diagnose exactly which module is missing and p
 No installer is needed. Copy the script to a convenient location and make it executable:
 
 ```bash
-curl -O https://raw.githubusercontent.com/norton287/wonder-backup/main/spindlecrank_backup.py
-chmod +x spindlecrank_backup.py
+curl -O https://raw.githubusercontent.com/norton287/wonder-backup/master/backup.py
+chmod +x backup.py
 ```
 
 Create the required directories (the script needs write access to both):
@@ -285,13 +274,13 @@ mkdir -p /backups /var/lib/spindlecrank
 Generate the default config:
 
 ```bash
-python3 spindlecrank_backup.py --generate-config
+python3 backup.py --generate-config
 ```
 
 Edit `/etc/spindlecrank/backup.ini` to set your source directories and backup destination, then run:
 
 ```bash
-python3 spindlecrank_backup.py
+python3 backup.py
 ```
 
 > **Note:** Backing up system directories like `/etc` requires root. Run with `sudo` or as the root user.
@@ -388,7 +377,7 @@ tar -xJf spindlecrank_webserver01_20240315_023000.tar.xz -C /restore etc/passwd
 ## CLI Reference
 
 ```
-usage: spindlecrank_backup.py [-h] [--config PATH] [--dry-run] [--generate-config] [--version]
+usage: backup.py [-h] [--config PATH] [--dry-run] [--generate-config] [--version]
 ```
 
 | Flag | Description |
@@ -453,7 +442,7 @@ Run nightly at 2 AM:
 crontab -e
 
 # Add:
-0 2 * * * /usr/bin/python3 /usr/local/bin/spindlecrank_backup.py >> /var/log/spindlecrank/cron.log 2>&1
+0 2 * * * /usr/bin/python3 /usr/local/bin/backup.py >> /var/log/spindlecrank/cron.log 2>&1
 ```
 
 Or with systemd timer — create `/etc/systemd/system/spindlecrank.service`:
@@ -465,7 +454,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /usr/local/bin/spindlecrank_backup.py
+ExecStart=/usr/bin/python3 /usr/local/bin/backup.py
 StandardOutput=journal
 StandardError=journal
 ```
