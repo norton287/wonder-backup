@@ -1,5 +1,3 @@
-# spindlecrank_backup
-
 A robust, single-file-at-a-time Linux backup utility written in pure Python.
 
 Designed around one core principle: **a single inaccessible file should never kill the whole backup.** Instead of treating the backup as one monolithic operation, spindlecrank processes every file individually — probing it, writing it, and recording its outcome — so the failure surface is always a list of individual files rather than a catastrophic archive abort.
