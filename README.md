@@ -4,6 +4,21 @@ A robust, single-file-at-a-time Linux backup utility written in pure Python.
 
 Designed around one core principle: **a single inaccessible file should never kill the whole backup.** Instead of treating the backup as one monolithic operation, spindlecrank processes every file individually — probing it, writing it, and recording its outcome — so the failure surface is always a list of individual files rather than a catastrophic archive abort.
 
+![Python](https://img.shields.io/badge/python-3.6%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+
+---
+
+## Two Script Versions
+
+| File | Description |
+|---|---|
+| **`spindlecrank_backup.py`** | Canonical version. Computes SHA-256 checksums in a single streaming pass via `_HashingReader` during archive write. Supports batched SQLite commits (`db_commit_batch`), CPU/IO priority settings (`nice_level`, `ionice_class`), and probes files with a 1-byte read. |
+| **`backup.py`** | Older, simpler version. Computes checksums with a separate `sha256_file()` call after archive write (two reads per file). No batching, no process priority controls, probes files with a 64 KB read. |
+
+New work should target `spindlecrank_backup.py`.
+
 ---
 
 ## Features
@@ -20,6 +35,32 @@ Designed around one core principle: **a single inaccessible file should never ki
 - **Graceful signal handling** — `SIGTERM`/`SIGINT` finishes the current file and closes the archive cleanly
 - **Zero external dependencies** — pure Python standard library (Python 3.6+)
 - **Startup dependency check** — validates that required C-extension modules (`lzma`, `sqlite3`) are functional before anything else runs, with actionable fix instructions per distro
+- **CPU/IO priority controls** — configurable `nice` and `ionice` settings so backups don't starve other workloads
+
+---
+
+## Quick Start
+
+```bash
+# 1. Download the script
+curl -O https://raw.githubusercontent.com/norton287/wonder-backup/main/spindlecrank_backup.py
+chmod +x spindlecrank_backup.py
+
+# 2. Create required directories
+mkdir -p /backups /var/lib/spindlecrank
+
+# 3. Generate the default config
+python3 spindlecrank_backup.py --generate-config
+
+# 4. Edit config to set your source directories
+nano /etc/spindlecrank/backup.ini
+
+# 5. Run a dry run first to verify what will be backed up
+python3 spindlecrank_backup.py --dry-run
+
+# 6. Run the backup (requires root for system directories)
+sudo python3 spindlecrank_backup.py
+```
 
 ---
 
@@ -39,7 +80,7 @@ After the space check passes, a streaming LZMA-compressed tar archive is opened 
 
 ```
 for each file:
-    probe (read first 64 KB)
+    probe (read 1 byte to verify readability)
     ├─ probe OK  → attempt archive write
     │              ├─ write OK  → record sha256 + size to queue + DB → next file
     │              └─ write ERR → mark retry, wait retry_delay seconds
@@ -52,7 +93,9 @@ for each file:
                    └─ probe ERR → record permanent failure → next file
 ```
 
-The probe step reads the first 64 KB of the file before touching the archive. This ensures the archive is never given a partial or unreadable file — the retry is at the readability level, not the archive-write level. Permanently failed files are appended to `failures.log` for administrator review; the backup continues with the next file.
+The probe step reads 1 byte of the file before touching the archive. This surfaces permission errors and hard locks without pulling data into the page cache unnecessarily, and ensures the archive is never given an unreadable file. Permanently failed files are appended to `failures.log` for administrator review; the backup continues with the next file.
+
+SHA-256 checksums are computed **in the same streaming pass as the archive write** via `_HashingReader`, eliminating a second full file read.
 
 ### Phase 3 — Cross-reference Verification
 
@@ -209,7 +252,7 @@ Additional patterns and directories can be added in the `[exclusions]` section o
 
 Both are included in standard Python installations. On minimal builds they may be absent:
 
-```
+```bash
 # Debian / Ubuntu
 apt install python3-lzma python3-sqlite3
 
@@ -229,7 +272,7 @@ The startup dependency check will diagnose exactly which module is missing and p
 No installer is needed. Copy the script to a convenient location and make it executable:
 
 ```bash
-curl -O https://raw.githubusercontent.com/your-org/spindlecrank/main/spindlecrank_backup.py
+curl -O https://raw.githubusercontent.com/norton287/wonder-backup/main/spindlecrank_backup.py
 chmod +x spindlecrank_backup.py
 ```
 
@@ -268,13 +311,16 @@ A default config is written automatically if the file does not exist.
 | `backup_dir` | `/backups` | Directory where archive files are written |
 | `backup_prefix` | `spindlecrank` | Prefix for archive filenames |
 | `compression` | `xz` | Compression algorithm: `xz`, `bz2`, or `gz` |
-| `compression_level` | `extreme` | Compression strength: `extreme` or `1`–`9` |
+| `compression_level` | `6` | Compression strength: `extreme` or `1`–`9` |
 | `retry_delay` | `3` | Seconds to wait before the retry attempt on a failed file |
 | `max_log_size_mb` | `10` | Size threshold (MB) that triggers `failures.log` rotation |
 | `log_retain_count` | `5` | Number of per-run log files to keep; also the rotation depth for `failures.log` |
 | `session_dir` | `/var/lib/spindlecrank` | Directory for per-run tracking files (manifest, queue, DB) |
 | `space_safety_factor` | `1.0` | Fraction of raw data size that must be free on the backup volume; `0` disables |
 | `min_free_mb` | `512` | Absolute minimum free space (MB) on the backup volume |
+| `nice_level` | `10` | CPU niceness: `0` = normal, `10` = lower, `19` = lowest |
+| `ionice_class` | `3` | I/O scheduling class: `0` = disabled, `2` = best-effort, `3` = idle only |
+| `db_commit_batch` | `50` | SQLite batch size; lower for crash-recovery granularity |
 
 ### `[directories]`
 
