@@ -239,17 +239,17 @@ Additional patterns and directories can be added in the `[exclusions]` section o
 - `lzma` C extension (requires `liblzma` at Python build time)
 - `sqlite3` C extension (requires `libsqlite3` at Python build time)
 
-Both are included in standard Python installations. On minimal builds they may be absent:
+Both are included in standard Python installations. On minimal or stripped builds they may be absent:
 
 ```bash
-# Debian / Ubuntu
-apt install python3-lzma python3-sqlite3
+# Debian / Ubuntu — modules ship with libpython3-stdlib; if missing, install the full package:
+apt install python3-full
 
-# Alpine Linux
-apk add python3-dev xz-dev sqlite-dev   # then rebuild Python
+# Alpine Linux — must have the underlying C libraries present at Python build time:
+apk add python3-dev xz-dev sqlite-dev
 
 # RHEL / CentOS / Fedora
-dnf install python3-libs xz-devel sqlite-devel
+dnf install python3 xz-devel sqlite-devel
 ```
 
 The startup dependency check will diagnose exactly which module is missing and print the correct fix command for common distributions.
