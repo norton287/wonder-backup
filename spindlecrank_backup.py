@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-spindlecrank_backup.py
+backup.py
 ======================
 Robust single-file-at-a-time Linux backup utility with maximum LZMA compression.
 
