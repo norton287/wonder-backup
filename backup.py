@@ -27,7 +27,7 @@ Failure strategy
 
 Usage
 -----
-    python3 spindlecrank_backup.py [--config PATH] [--dry-run] [--generate-config]
+    python3 backup.py [--config PATH] [--dry-run] [--generate-config]
 """
 
 import argparse
@@ -53,7 +53,7 @@ from typing import Dict, Generator, List, Optional, Set, Tuple
 
 # ─── Version & constants ──────────────────────────────────────────────────────
 
-VERSION        = "1.0.0"
+VERSION        = "1.1.0"
 SCRIPT_NAME    = "spindlecrank"
 DEFAULT_CONFIG = "/etc/spindlecrank/backup.ini"
 LOG_DIR        = Path("/var/log/spindlecrank")
@@ -124,9 +124,9 @@ def check_runtime_dependencies() -> None:
         errors.append(
             "The 'lzma' module is missing from this Python build.\n"
             "  This module requires liblzma to be present when CPython is compiled.\n"
-            "  Fix (Debian/Ubuntu):  apt install python3-lzma  (or rebuild Python)\n"
-            "  Fix (Alpine):         apk add python3-dev xz-dev  (then rebuild Python)\n"
-            "  Fix (RHEL/CentOS):    dnf install python3-libs xz-devel"
+            "  Fix (Debian/Ubuntu):  apt install python3-full\n"
+            "  Fix (Alpine):         apk add python3-dev xz-dev\n"
+            "  Fix (RHEL/CentOS):    dnf install python3 xz-devel"
         )
     except Exception as exc:
         errors.append(
@@ -143,9 +143,9 @@ def check_runtime_dependencies() -> None:
     except ImportError:
         errors.append(
             "The 'sqlite3' module is missing from this Python build.\n"
-            "  Fix (Debian/Ubuntu):  apt install python3-sqlite3\n"
-            "  Fix (Alpine):         apk add python3-dev sqlite-dev  (then rebuild Python)\n"
-            "  Fix (RHEL/CentOS):    dnf install python3-sqlite3 sqlite-devel"
+            "  Fix (Debian/Ubuntu):  apt install python3-full\n"
+            "  Fix (Alpine):         apk add python3-dev sqlite-dev\n"
+            "  Fix (RHEL/CentOS):    dnf install python3 sqlite-devel"
         )
     except Exception as exc:
         errors.append(
@@ -251,21 +251,6 @@ skip_dirs =
 """
 
 # ─── Utility functions ────────────────────────────────────────────────────────
-
-def sha256_file(path: Path, chunk: int = 65_536) -> Optional[str]:
-    """Return hex SHA-256 of a file's contents, or None on any error."""
-    h = hashlib.sha256()
-    try:
-        with open(path, "rb") as fh:
-            while True:
-                data = fh.read(chunk)
-                if not data:
-                    break
-                h.update(data)
-        return h.hexdigest()
-    except OSError:
-        return None
-
 
 def human_size(nbytes: int) -> str:
     """Convert a byte count to a human-readable string."""
@@ -611,6 +596,7 @@ class FileManifest:
             "mode":  st.st_mode,
         }
         self._fh.write(json.dumps(record, separators=(",", ":")) + "\n")  # type: ignore[union-attr]
+        self._fh.flush()  # type: ignore[union-attr]
 
     def close(self) -> None:
         if self._fh:
@@ -675,6 +661,7 @@ class WorkQueue:
     def _append(self, record: dict) -> None:
         record["ts"] = utcnow_str()
         self._fh.write(json.dumps(record, separators=(",", ":")) + "\n")
+        self._fh.flush()
 
     def mark_pending(self, filepath: str)                            -> None:
         self._append({"path": filepath, "status": self.PENDING})
@@ -1479,7 +1466,7 @@ def main() -> None:
     check_runtime_dependencies()
 
     parser = argparse.ArgumentParser(
-        prog="spindlecrank_backup.py",
+        prog="backup.py",
         description=(
             f"{SCRIPT_NAME} — Robust single-file-at-a-time Linux backup utility "
             f"v{VERSION}"
